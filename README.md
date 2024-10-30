@@ -10,7 +10,8 @@ Creates a new signal that, when awaited, returns after one of the passed signals
 Usage:
 
 ```gdscript
-signal some_signal
+signal signal1
+signal signal2(a, b)
 
 func coro1():
   await ready
@@ -18,7 +19,7 @@ func coro1():
 func coro2(a, b):
   await renamed
 
-await Async.any([some_signal, coro1, [coro2, "a", "b"]])
+await Async.any([signal1, Async.signal_to_coro(signal2), coro1, [coro2, "a", "b"]])
 ```
 
 ### Async.all
@@ -28,7 +29,8 @@ Creates a new signal that, when awaited, returns after all of the passed signals
 Usage:
 
 ```gdscript
-signal some_signal
+signal signal1
+signal signal2(a, b)
 
 func coro1():
   await ready
@@ -36,12 +38,12 @@ func coro1():
 func coro2(a, b):
   await renamed
 
-await Async.all([some_signal, coro1, [coro2, "a", "b"]])
+await Async.all([signal1, Async.signal_to_coro(signal2), coro1, [coro2, "a", "b"]])
 ```
 
 ### Async.coro_to_signal
 
-Converts a corouting into a signal that, when awaited, will emit the coroutine's return value.
+Converts a coroutine into a signal that, when awaited, will emit the coroutine's return value.
 
 Usage:
 
@@ -62,11 +64,35 @@ var coro_signal3: Signal = Async.coro_to_signal(coro3, "a", "b")
 coro_signal1.connect(func(): print("Hello"))
 coro_signal2.connect(func(node: Node): node.free())
 coro_signal3.connect(func(): print("World!"))
+ready.emit()  # => print("Hello"), print("World!")
+replacing_by.emit(self)  # => self.free()
 ```
 
 ### Async.signal_to_coro
 
-Probably not very useful, included for the sake of completeness.
+Converts a signal into a coroutine that, when awaited, will return signal's next emitted value.
+
+This can be used to pass a signals with arguments to `Async.any` or `Async.all`, which would otherwise fail.
+
+Usage:
+
+```gdscript
+signal signal1
+signal signal2(a)
+signal signal3(a, b)
+
+var signal_coro1: Signal = Async.coro_to_signal(coro1)
+var signal_coro2: Signal = Async.coro_to_signal(coro2)
+var signal_coro3: Signal = Async.coro_to_signal(coro3)
+
+signal1.emit.call_deferred()
+signal2.emit.call_deferred("a")
+signal3.emit.call_deferred("a", "b")
+print(await Async.signal_to_coro(signal_coro1).call())  # <null>
+print(await Async.signal_to_coro(signal_coro2).call())  # "a"
+print(await Async.signal_to_coro(signal_coro3).call())  # ["a", "b"]
+```
+
 
 ### Async.map
 

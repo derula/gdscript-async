@@ -23,14 +23,10 @@ static func coro_to_signal(coro: Callable, args := []) -> Signal:
 
 static func signal_to_coro(a_signal: Signal) -> Variant:
 	"""
-	Convert a signal into a coroutine.
-	Useful if you-
-	I mean, technically, you could-
-	...
-	Yeah, I got nothing. This seems useless.
+	Convert a signal into a coroutine. Useful if you
+	want to use any/all with non-niladic signals.
 	"""
-	# Who would _want_ this?!
-	return await a_signal
+	return func() -> Variant: return await a_signal
 
 static func map(array: Array, coro: Callable) -> Array:
 	"""
@@ -85,11 +81,11 @@ class CoroSignal extends KeepAlive:
 	You can await the `returned` signal to get the coroutine's return value.
 	"""
 	signal returned(value: Variant)
-	
+
 	func _init(coro: Callable) -> void:
 		super()
 		_run_coro(coro)
-	
+
 	func _run_coro(coro: Callable) -> void:
 		returned.emit(await coro.call())
 		finished.emit()
@@ -100,7 +96,7 @@ class Mapper extends KeepAlive:
 	You can await the `mapped` signal to get the mapped array.
 	"""
 	signal mapped(result: Array)
-	
+
 	func _init(array: Array, coro: Callable) -> void:
 		super()
 		var result := array.duplicate()
