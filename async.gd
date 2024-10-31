@@ -50,13 +50,11 @@ class Awaiter extends KeepAlive:
 	A KeepAlive that finishes itself once a certain number
 	of the passed signals or coroutines have been awaited.
 	"""
-	signal finished(results: Array[AwaitedResult])
-	var emits_left: int
-	var results: Array[AwaitedResult]
+	signal finished(results: AwaitedResults)
+	var results: AwaitedResults
 
 	func _init(signals: Array, how_many: int) -> void:
 		keep_until(finished)
-		emits_left = how_many
 		for untyped_signal: Variant in signals:
 			if untyped_signal is Signal:
 				var typed_signal: Signal = untyped_signal
@@ -66,12 +64,11 @@ class Awaiter extends KeepAlive:
 				(func() -> void: _collected(untyped_signal, await typed_signal.call())).call()
 			else:
 				push_error("Cannot wait for " + type_string(typeof(untyped_signal)))
-				emits_left -= 1
+				how_many -= 1
+		results = AwaitedResults.new(how_many, finished)
 
 	func _collected(awaitable: Variant, result: Variant) -> void:
-		results.push_back(AwaitedResult.new(awaitable, result))
-		emits_left -= 1
-		if emits_left == 0: finished.emit(results)
+		results.collected.emit(AwaitedResult.new(awaitable, result))
 
 class CoroSignal extends KeepAlive:
 	"""
@@ -99,6 +96,43 @@ class Mapper extends KeepAlive:
 			signals.append(func() -> void: result[i] = await coro.call(array[i]))
 		Async.all(signals).connect(finished.emit.bind(result).unbind(1))
 
+class AwaitedResults:
+	"""
+	A collection of awaited signals and coroutines.
+	Use the `has` function to check if a specific awaitable has emitted /
+	returned, or use `flatten` to get all results in one linear array.
+	"""
+	signal collected(result: AwaitedResult)
+
+	var all: Array[AwaitedResult]
+
+	func _init(how_many: int, finished: Signal) -> void:
+		collected.connect(func(result: AwaitedResult) -> void:
+			all.append(result)
+			if len(all) == how_many: finished.emit(self)
+		)
+
+	func has(awaitable: Variant) -> bool:
+		for result: AwaitedResult in all:
+			if result.result is not AwaitedResults:
+				if result.awaited == awaitable: return true
+				continue
+			var inner_result: AwaitedResults = result.result
+			if inner_result.has(awaitable): return true
+		return false
+
+	func flatten() -> Array[AwaitedResult]:
+		var results: Array[AwaitedResult]
+		for result: AwaitedResult in all:
+			if result.result is not AwaitedResults:
+				results.append(result)
+				continue
+			var inner_result: AwaitedResults = result.result
+			results.append_array(inner_result.flatten())
+		return results
+
+	func _to_string() -> String: return str(flatten())
+
 class AwaitedResult:
 	"""
 	An awaited signal or coroutine together with its emitted / returned value(s).
@@ -106,16 +140,16 @@ class AwaitedResult:
 	In all other cases, the result will be a single value.
 	"""
 	var awaited_signal: Signal:
-		get(): return awaitable if awaitable is Signal else null
+		get(): return awaited if awaited is Signal else null
 	var awaited_coro: Callable:
-		get(): return awaitable if awaitable is Callable else null
-	var awaitable: Variant
+		get(): return awaited if awaited is Callable else null
+	var awaited: Variant
 	var result: Variant
 
-	func _init(an_awaitable: Variant, a_result: Variant) -> void:
-		awaitable = an_awaitable
+	func _init(awaitable: Variant, a_result: Variant) -> void:
+		awaited = awaitable
 		result = a_result
 
 	func _to_string() -> String:
-		var glue := " emitted " if awaitable is Signal else " returned "
-		return str(awaitable) + glue + str(result)
+		var glue := " emitted " if awaited is Signal else " returned "
+		return str(awaited) + glue + str(result)
