@@ -12,15 +12,12 @@ Usage:
 ```gdscript
 signal signal1
 signal signal2(a, b)
+func coro1(): await signal1
+func coro2(a, b): return await signal2
 
-func coro1():
-  await ready
-
-func coro2(a, b):
-  await renamed
-
-await Async.any([signal1, Async.signal_to_coro(signal2), coro1, [coro2, "a", "b"]])
-```
+signal1.emit.call_deferred()
+signal2.emit.call_deferred("a", "b")
+print(await Async.any([signal1, signal2, coro1, coro2.bind("a", "b")]))  # e.g. [coro2 returned ["a", "b"]]
 
 ### Async.all
 
@@ -31,14 +28,10 @@ Usage:
 ```gdscript
 signal signal1
 signal signal2(a, b)
+func coro1(): await signal1
+func coro2(a, b): return await signal2
 
-func coro1():
-  await ready
-
-func coro2(a, b):
-  await renamed
-
-await Async.all([signal1, Async.signal_to_coro(signal2), coro1, [coro2, "a", "b"]])
+await Async.all([signal1, signal2, coro1, coro2.bind("a", "b")])  # [[signal]signal1 emitted <null>, coro1 returned <null>, [signal]signal2 emitted ["a", "b"], coro2 returned ["a", "b"]]
 ```
 
 ### Async.coro_to_signal
@@ -48,31 +41,25 @@ Converts a coroutine into a signal that, when awaited, will emit the coroutine's
 Usage:
 
 ```gdscript
-func coro1():
-  await ready
+signal signal1
+signal signal2(string)
+func coro1(): await signal1
+func coro2(): return await signal2
+func coro3(a, b): await signal1
 
-func coro2():
-  return await replacing_by
+Async.coro_to_signal(coro1).connect(func(_r): print("Hello"))
+Async.coro_to_signal(coro2).connect(print)
+Async.coro_to_signal(coro3, ["a", "b"]).connect(func(_r): print("World!"))
 
-func coro3(a, b):
-  await ready
-
-var coro_signal1: Signal = Async.coro_to_signal(coro1)
-var coro_signal2: Signal = Async.coro_to_signal(coro2)
-var coro_signal3: Signal = Async.coro_to_signal(coro3, "a", "b")
-
-coro_signal1.connect(func(): print("Hello"))
-coro_signal2.connect(func(node: Node): node.free())
-coro_signal3.connect(func(): print("World!"))
-ready.emit()  # => print("Hello"), print("World!")
-replacing_by.emit(self)  # => self.free()
+signal1.emit()  # => Hello\nWorld!
+signal2.emit("Goodbye.")  # => Goodbye.
 ```
 
 ### Async.signal_to_coro
 
 Converts a signal into a coroutine that, when awaited, will return signal's next emitted value.
 
-This can be used to pass a signals with arguments to `Async.any` or `Async.all`, which would otherwise fail.
+This could be used, for example, if you want to get the next emitted value from a signal with unknown arity.
 
 Usage:
 
@@ -81,22 +68,19 @@ signal signal1
 signal signal2(a)
 signal signal3(a, b)
 
-var signal_coro1: Signal = Async.coro_to_signal(coro1)
-var signal_coro2: Signal = Async.coro_to_signal(coro2)
-var signal_coro3: Signal = Async.coro_to_signal(coro3)
-
 signal1.emit.call_deferred()
 signal2.emit.call_deferred("a")
 signal3.emit.call_deferred("a", "b")
-print(await Async.signal_to_coro(signal_coro1).call())  # <null>
-print(await Async.signal_to_coro(signal_coro2).call())  # "a"
-print(await Async.signal_to_coro(signal_coro3).call())  # ["a", "b"]
+
+print(await Async.signal_to_coro(signal1).call())  # <null>
+print(await Async.signal_to_coro(signal2).call())  # "a"
+print(await Async.signal_to_coro(signal3).call())  # ["a", "b"]
 ```
 
 
 ### Async.map
 
-An async version of `Array.map`. I haven't actually tested, but thought it's a fun example to include.
+An async version of `Array.map`. Not sure if it's useful, but I thought it's a fun example to include.
 
 Usage:
 
@@ -105,7 +89,7 @@ func square(value: int):
   await ready
   return value ** 2
 
-var squares = Async.map([1, 2, 3, 4], square)
+print(await Async.map([1, 2, 3, 4], square))  # [1, 4, 9, 16]
 ```
 
 ### Combinations
@@ -133,7 +117,7 @@ Basically, it creates reference counted objects with signals and then returns th
 
 ## Would it work without the `KeepAlive` hack?
 
-For the most part, yes. `coro_to_signal` would not work and the way `any` / `all` deal with coroutines would need changes. `any` / `all` calls could not be nested. I think `map` should work fine.
+For the most part, yes. `coro_to_signal` would not work and the way `any` / `all` deal with coroutines would need changes. `any` / `all` calls could not be nested. Not sure about `map`.
 
 ## Will you implement tests using GUT?
 
