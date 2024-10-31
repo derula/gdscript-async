@@ -18,6 +18,7 @@ func coro2(a, b): return await signal2
 signal1.emit.call_deferred()
 signal2.emit.call_deferred("a", "b")
 print(await Async.any([signal1, signal2, coro1, coro2.bind("a", "b")]))  # e.g. [coro2 returned ["a", "b"]]
+```
 
 ### Async.all
 
